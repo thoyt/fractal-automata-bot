@@ -1,0 +1,3 @@
+GIF_DIRECTORY = 'gifs'
+FRAMES_DIRECTORY = 'frames'
+

@@ -5,8 +5,9 @@ import imageio
 import numpy as np
 import scipy.misc as smp
 from natsort import natsorted
-from random import getrandbits, random
+from random import getrandbits, random, randint
 
+import settings
 
 class FractalAutomaton:
 
@@ -59,8 +60,10 @@ class FractalAutomaton:
         for n in range(max_neighbors):
             if random() < k:
                 array.append(n)
+        if len(array) == 0:
+            array = list(set([randint(0, max_neighbors)
+                for _ in range(max_neighbors)]))
         rule['array'] = array
-        print rule
         self.rule = rule
 
     def update(self):
@@ -100,51 +103,67 @@ class FractalAutomaton:
 
         self.grid = new_grid
 
-    def save_frame(self, id=1, filename=None, size=(1000,1000)):
-        if not filename:
-            filename = 'frames/fractal_%s_frame_%s.png' % (self.id, self.frame)
+    def save_frame(self, id=1, size=(1000,1000)):
+        filename = '%s/fractal_%s_frame_%s.png' % (
+                settings.FRAMES_DIRECTORY, self.id, self.frame)
         data = smp.imresize(self.grid[depth-1], size, interp='nearest')
         self.frame += 1
         return smp.imsave(filename, data)
 
     def render_gif(self):
-        pattern = 'frames/fractal_%s_*.png' % self.id
+        pattern = '%s/fractal_%s_*.png' % (settings.FRAMES_DIRECTORY, self.id)
         filenames = natsorted(glob.glob(pattern))
         images = []
         for filename in filenames:
             images.append(imageio.imread(filename))
-        imageio.mimsave('gifs/fractal_%s_%s.gif' % (self.id, self.k), images)
+        gif_filename = '%s/fractal_%s_%s.gif' % (
+                settings.GIF_DIRECTORY, self.id, self.k)
+        gif_filename_comp = '%s/fractal_%s_%s_comp.gif' % (
+                settings.GIF_DIRECTORY, self.id, self.k)
+        imageio.mimsave(gif_filename, images)
+        compression_command = 'gifsicle -i -O3 %s > %s' % (
+                gif_filename, gif_filename_comp)
+        os.system(compression_command)
+        os.remove(gif_filename)
 
-    def run(self, max_frames=100, save_gif=False, threshold=0.7,
-            set_random_rule=False):
-        thr = threshold * self._grid_sizes[-1] ** 2
+    def render_frames(self, max_frames=100):
+        ''' run the automaton until all of the cells are
+            zero or max_frames is reached'''
         for i_fr in range(max_frames):
             self.update()
             self.save_frame()
-            if (i_fr > 5 and
-                (len(np.where(self.grid[-1] == 1)[0]) > thr or
-                 np.all(self.grid[-1] == 0))):
+            if np.all(self.grid[-1] == 0):
                 break
-        if save_gif and i_fr > 10:
-            self.render_gif()
 
-        rule = "array: (%s) sum_parents: %s, sum_local: %s, sum_children: %s" % (
-                ','.join(map(str, self.rule['array'])), self.rule['sum_parents'],
-                self.rule['sum_local'], self.rule['sum_children'])
-
-        print "fractal %s done at frame %s with rule %s" % (self.id, i_fr, rule)
         return i_fr
 
+    def clean(self):
+        ''' remove all the frames this automaton has generated
+            from the FRAMES_DIRECTORY'''
+        for f in glob.glob('%s/fractal_%s*' % (
+                settings.FRAMES_DIRECTORY, self.id)):
+            os.remove(f)
+
+    def run(self, min_frames):
+        i_fr = self.render_frames()
+        if i_fr >= min_frames:
+            self.render_gif()
+        self.clean()
+        return i_fr
 
 if __name__=='__main__':
     depth = 10
-    dk = 0.05
+    k = 0.0001
+    dk = 0.0003
+    min_frames = 10
 
     f = FractalAutomaton(depth, k, setup=False)
-    while True:
-        f.set_random_rule()
-        k = 0.01
-        while k < 0.6 or i_fr < 99:
-            f.setup(k) 
-            i_fr = f.run(save_gif=True)
-            k += dk
+    f.set_random_rule()
+    print "initialized fractal with rule %s" % f.rule
+    i_fr = 0
+    while i_fr < 99 and k < 0.6:
+        f.setup(k)
+        i_fr = f.run(min_frames)
+        print "fractal %s done at frame %s; k = %s" % (f.id, i_fr, k)
+        f.clean()
+        k += dk
