@@ -3,3 +3,4 @@ venv/
 *.png
 gifs/
 frames/
+local_settings.py
