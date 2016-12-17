@@ -18,6 +18,8 @@ class FractalAutomaton:
     def __init__(self, depth, k, setup=True):
         self.depth = depth
         self._grid_sizes = [2**i for i in range(depth)]
+        N = self._grid_sizes[-1]
+        self.image_grid = np.zeros((N, N, 3), dtype=np.uint32)
         if setup:
             self.setup(k)
         self.rule = {
@@ -66,6 +68,24 @@ class FractalAutomaton:
         rule['array'] = array
         self.rule = rule
 
+    def set_random_colorscheme(self):
+        COMPLEMENT, GRAYSCALE, RANDOM = 1, 2, 3
+        colorscheme = randint(1,3)
+        if colorscheme == COMPLEMENT:
+            rr, gg, bb = randint(0,255), randint(0,255), randint(0,255)
+            b = np.array([rr,gg,bb])
+            w = np.array([255-rr,255-gg,255-bb])
+        elif colorscheme == GRAYSCALE:
+            n, m = randint(0,255), randint(0,255)
+            b = np.array([n,n,n])
+            w = np.array([m,m,m])
+        elif colorscheme == RANDOM:
+            r1, g1, b1 = randint(0,255), randint(0,255), randint(0,255)
+            r2, g2, b2 = randint(0,255), randint(0,255), randint(0,255)
+            b = np.array([r1,g1,b1])
+            w = np.array([r2,g2,b2])
+        self.colors = [b, w]
+
     def update(self):
         new_grid = self.grid.copy()
         for d in range(1, self.depth):
@@ -103,11 +123,14 @@ class FractalAutomaton:
 
         self.grid = new_grid
 
-    def save_frame(self, id=1, size=(1000,1000)):
-        filename = '%s/fractal_%s_frame_%s.png' % (
-                settings.FRAMES_DIRECTORY, self.id, self.frame)
-        data = smp.imresize(self.grid[depth-1], size, interp='nearest')
+    def save_frame(self, id=1, size=(800,800)):
+        self.image_grid[np.where(self.grid[depth-1] == 0)] = self.colors[0]
+        self.image_grid[np.where(self.grid[depth-1] == 1)] = self.colors[1]
+        data = smp.imresize(self.image_grid, size, interp='nearest')
         self.frame += 1
+        frame_number = '0' * (3 - len(str(self.frame))) + str(self.frame)
+        filename = '%s/fractal_%s_%s.png' % (
+                settings.FRAMES_DIRECTORY, self.id, frame_number)
         return smp.imsave(filename, data)
 
     def render_gif(self):
@@ -116,12 +139,12 @@ class FractalAutomaton:
         images = []
         for filename in filenames:
             images.append(imageio.imread(filename))
-        gif_filename = '%s/fractal_%s_%s.gif' % (
-                settings.GIF_DIRECTORY, self.id, self.k)
-        gif_filename_comp = '%s/fractal_%s_%s_comp.gif' % (
-                settings.GIF_DIRECTORY, self.id, self.k)
+        gif_filename = '%s/%s.gif' % (
+                settings.GIF_DIRECTORY, self.id)
+        gif_filename_comp = '%s/fractal_%s.gif' % (
+                settings.GIF_DIRECTORY, self.id)
         imageio.mimsave(gif_filename, images)
-        compression_command = 'gifsicle -i -O3 %s > %s' % (
+        compression_command = 'gifsicle -i -d 15 -O3 %s > %s' % (
                 gif_filename, gif_filename_comp)
         os.system(compression_command)
         os.remove(gif_filename)
@@ -132,30 +155,34 @@ class FractalAutomaton:
         for i_fr in range(max_frames):
             self.update()
             self.save_frame()
-            if np.all(self.grid[-1] == 0):
+            if (np.all(self.grid[-1] == 0) or
+                np.all(self.grid[-1] == 1)):
                 break
 
         return i_fr
 
     def clean(self):
         ''' remove all the frames this automaton has generated
-            from the FRAMES_DIRECTORY'''
+            from FRAMES_DIRECTORY'''
         for f in glob.glob('%s/fractal_%s*' % (
                 settings.FRAMES_DIRECTORY, self.id)):
             os.remove(f)
 
-    def run(self, min_frames):
+    def run(self, min_frames, clean=True):
+        self.set_random_colorscheme()
         i_fr = self.render_frames()
         if i_fr >= min_frames:
             self.render_gif()
-        self.clean()
+        if clean:
+            self.clean()
         return i_fr
 
+
 if __name__=='__main__':
-    depth = 10
+    depth = randint(8,11)
     k = 0.0001
-    dk = 0.0003
     min_frames = 10
+    clean = False
 
     f = FractalAutomaton(depth, k, setup=False)
     f.set_random_rule()
@@ -163,7 +190,6 @@ if __name__=='__main__':
     i_fr = 0
     while i_fr < 99 and k < 0.6:
         f.setup(k)
-        i_fr = f.run(min_frames)
+        i_fr = f.run(min_frames, clean=clean)
         print "fractal %s done at frame %s; k = %s" % (f.id, i_fr, k)
-        f.clean()
-        k += dk
+        k *= 1.2
