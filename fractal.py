@@ -33,7 +33,7 @@ class FractalAutomaton:
         grid = np.array([np.random.rand(N, N) for N in self._grid_sizes])
 
         # initialize the grid with density k
-        for i in range(depth):
+        for i in range(self.depth):
             np.place(grid[i], grid[i] > 1-k, 1)
             np.place(grid[i], grid[i] <= 1-k, 0)
         self.grid = grid
@@ -123,9 +123,9 @@ class FractalAutomaton:
 
         self.grid = new_grid
 
-    def save_frame(self, id=1, size=(800,800)):
-        self.image_grid[np.where(self.grid[depth-1] == 0)] = self.colors[0]
-        self.image_grid[np.where(self.grid[depth-1] == 1)] = self.colors[1]
+    def save_frame(self, id=1, size=(700,700)):
+        self.image_grid[np.where(self.grid[self.depth-1] == 0)] = self.colors[0]
+        self.image_grid[np.where(self.grid[self.depth-1] == 1)] = self.colors[1]
         data = smp.imresize(self.image_grid, size, interp='nearest')
         self.frame += 1
         frame_number = '0' * (3 - len(str(self.frame))) + str(self.frame)
@@ -148,6 +148,8 @@ class FractalAutomaton:
                 gif_filename, gif_filename_comp)
         os.system(compression_command)
         os.remove(gif_filename)
+
+        return gif_filename_comp
 
     def render_frames(self, max_frames=100):
         ''' run the automaton until all of the cells are
@@ -172,24 +174,26 @@ class FractalAutomaton:
         self.set_random_colorscheme()
         i_fr = self.render_frames()
         if i_fr >= min_frames:
-            self.render_gif()
+            filename = self.render_gif()
+        else:
+            filename = None
         if clean:
             self.clean()
-        return i_fr
+        return filename, i_fr
 
 
 if __name__=='__main__':
     depth = randint(8,11)
     k = 0.0001
     min_frames = 10
-    clean = False
+    clean = True
 
     f = FractalAutomaton(depth, k, setup=False)
     f.set_random_rule()
     print "initialized fractal with rule %s" % f.rule
-    i_fr = 0
-    while i_fr < 99 and k < 0.6:
+    xi_fr = 0
+    while xi_fr < 99 and k < 0.6:
         f.setup(k)
-        i_fr = f.run(min_frames, clean=clean)
-        print "fractal %s done at frame %s; k = %s" % (f.id, i_fr, k)
+        xfilename, xi_fr = f.run(min_frames, clean=clean)
+        print "fractal %s done at frame %s; k = %s" % (f.id, xi_fr, k)
         k *= 1.2
